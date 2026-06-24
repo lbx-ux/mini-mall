@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//e/Claude/**)",
+      "Bash(mv mini_mall mini_mall.bak)",
+      "Bash(npx create-next-app@latest mini-mall --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --use-npm)",
+      "Bash(timeout 15 npx next --version)"
+    ]
+  }
+}
