@@ -77,8 +77,9 @@ src/
 │   ├── auth.ts                # JWT sign/verify + hash/compare
 │   ├── membership.ts          # calcMembershipLevel, getDiscountRate
 │   └── utils.ts               # cn() 等工具函数
-└── actions/                   # Server Actions
-    ├── auth.ts
+├── middleware.ts                  # 路由保护
+└── actions/                       # Server Actions
+    ├── auth.ts                    # login/register/logout
     ├── cart.ts
     ├── order.ts
     └── admin.ts
