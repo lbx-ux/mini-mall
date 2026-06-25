@@ -84,22 +84,26 @@ export async function payOrder(orderId: number) {
   const userId = await getUserId();
   if (!userId) return { error: "请先登录" };
 
-  const order = await prisma.order.findUnique({
-    where: { id: orderId },
-    include: { items: true },
-  });
-  if (!order || order.userId !== userId) return { error: "订单不存在" };
-  if (order.status !== "PENDING") return { error: "订单状态不允许支付" };
+  let levelUp: string | undefined;
 
-  const userBefore = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { membershipLevel: true },
-  });
-  const oldLevel = userBefore?.membershipLevel ?? 0;
+  const result = await prisma.$transaction(async (tx) => {
+    // 事务内重新读取订单，确保状态检查互斥
+    const order = await tx.order.findUnique({
+      where: { id: orderId },
+      include: { items: true },
+    });
+    if (!order || order.userId !== userId) return { error: "订单不存在" };
+    if (order.status !== "PENDING") return { error: "订单状态不允许支付" };
 
-  await prisma.$transaction(async (tx) => {
-    // 扣减库存
+    // 校验库存并扣减
     for (const item of order.items) {
+      const product = await tx.product.findUnique({
+        where: { id: item.productId },
+        select: { stock: true },
+      });
+      if (!product || product.stock < item.quantity) {
+        return { error: "库存不足" };
+      }
       await tx.product.update({
         where: { id: item.productId },
         data: { stock: { decrement: item.quantity } },
@@ -124,18 +128,13 @@ export async function payOrder(orderId: number) {
         where: { id: userId },
         data: { membershipLevel: newLevel },
       });
+      levelUp = getMembershipName(newLevel);
     }
+
+    return { success: true as const, levelUp };
   });
 
-  let levelUp: string | undefined;
-  const updatedUser = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { membershipLevel: true },
-  });
-  const newLevel = updatedUser?.membershipLevel ?? 0;
-  if (newLevel > oldLevel) {
-    levelUp = getMembershipName(newLevel);
-  }
+  if (result && "error" in result) return result;
 
   revalidatePath("/orders");
   return { success: true, levelUp };

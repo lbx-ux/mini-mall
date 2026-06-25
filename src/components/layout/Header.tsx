@@ -1,9 +1,22 @@
 import Link from "next/link";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { verifyJwt } from "@/lib/auth";
 import { getMembershipName } from "@/lib/membership";
+import { prisma } from "@/lib/prisma";
 
 async function getUser() {
+  // 优先从 middleware 注入的 headers 读取 userId
+  const headersList = await headers();
+  const userIdHeader = headersList.get("x-user-id");
+  if (userIdHeader) {
+    const user = await prisma.user.findUnique({
+      where: { id: parseInt(userIdHeader) },
+      select: { id: true, role: true, membershipLevel: true },
+    });
+    if (user) return user;
+  }
+
+  // 回退：从 cookie 读取 JWT
   const cookieStore = await cookies();
   const token = cookieStore.get("token")?.value;
   if (!token) return null;

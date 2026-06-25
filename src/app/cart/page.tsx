@@ -1,17 +1,22 @@
 import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import { headers } from "next/headers";
 import { getCart } from "@/actions/cart";
 import { getMembershipName, getDiscountRate } from "@/lib/membership";
 import { formatPrice } from "@/lib/utils";
 import { CartItemRow } from "./CartItemRow";
-import { cookies } from "next/headers";
-import { verifyJwt } from "@/lib/auth";
+import { CheckoutForm } from "./CheckoutForm";
 
 async function getUser() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("token")?.value;
-  if (!token) return null;
-  return verifyJwt(token);
+  const headersList = await headers();
+  const userId = headersList.get("x-user-id");
+  const role = headersList.get("x-user-role");
+  const membershipLevel = headersList.get("x-user-membership-level");
+  if (!userId) return null;
+  return {
+    userId: parseInt(userId),
+    role: role ?? "USER",
+    membershipLevel: parseInt(membershipLevel ?? "0"),
+  };
 }
 
 export default async function CartPage() {
@@ -25,6 +30,7 @@ export default async function CartPage() {
       <div className="py-16 text-center">
         <h1 className="text-2xl font-bold text-gray-900">购物车</h1>
         <p className="mt-4 text-gray-500">购物车是空的</p>
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
         <a
           href="/products"
           className="mt-6 inline-block rounded-lg bg-blue-600 px-6 py-3 text-sm font-medium text-white hover:bg-blue-700"
@@ -104,29 +110,7 @@ export default async function CartPage() {
           )}
         </div>
 
-        <form
-          action={async (FormData) => {
-            "use server";
-            const { createOrder } = await import("@/actions/order");
-            await createOrder();
-          }}
-        >
-          {stockErrors.length > 0 ? (
-            <button
-              disabled
-              className="mt-4 h-10 w-full cursor-pointer rounded-lg bg-gray-300 text-sm font-medium text-gray-500"
-            >
-              请先处理库存问题
-            </button>
-          ) : (
-            <button
-              type="submit"
-              className="mt-4 h-10 w-full cursor-pointer rounded-lg bg-blue-600 text-sm font-medium text-white hover:bg-blue-700"
-            >
-              提交订单
-            </button>
-          )}
-        </form>
+        <CheckoutForm hasStockErrors={stockErrors.length > 0} />
       </div>
     </div>
   );

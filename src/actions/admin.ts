@@ -49,7 +49,13 @@ export async function updateProduct(id: number, prevState: unknown, formData: Fo
   const admin = await verifyAdmin();
   if (!admin) return { error: "无权限" };
 
-  const parsed = productSchema.safeParse(Object.fromEntries(formData));
+  const entries = Object.fromEntries(formData);
+  // checkbox 取消勾选时不在 FormData 中，手动补上
+  if (!("isPublished" in entries)) {
+    (entries as Record<string, unknown>).isPublished = "false";
+  }
+
+  const parsed = productSchema.safeParse(entries);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
   try {
@@ -66,7 +72,12 @@ export async function deleteProduct(id: number) {
   const admin = await verifyAdmin();
   if (!admin) return { error: "无权限" };
 
-  await prisma.product.delete({ where: { id } });
+  try {
+    await prisma.product.delete({ where: { id } });
+  } catch {
+    return { error: "删除失败，商品可能被订单引用" };
+  }
+
   revalidatePath("/admin/products");
   return { success: true };
 }
@@ -135,6 +146,22 @@ export async function updateOrderStatus(orderId: number, status: string) {
 
   const validStatuses = ["PENDING", "PAID", "SHIPPED", "DELIVERED", "CANCELLED"];
   if (!validStatuses.includes(status)) return { error: "无效状态" };
+
+  const order = await prisma.order.findUnique({ where: { id: orderId } });
+  if (!order) return { error: "订单不存在" };
+
+  // 状态流转校验
+  const allowedTransitions: Record<string, string[]> = {
+    PENDING: ["PAID", "CANCELLED"],
+    PAID: ["SHIPPED"],
+    SHIPPED: ["DELIVERED"],
+    DELIVERED: [],
+    CANCELLED: [],
+  };
+  const allowed = allowedTransitions[order.status] ?? [];
+  if (!allowed.includes(status)) {
+    return { error: `不允许从 ${order.status} 变更到 ${status}` };
+  }
 
   await prisma.order.update({
     where: { id: orderId },

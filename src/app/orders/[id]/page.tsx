@@ -1,9 +1,7 @@
 import { notFound, redirect } from "next/navigation";
-import { cookies } from "next/headers";
+import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { verifyJwt } from "@/lib/auth";
 import { formatPrice, cn } from "@/lib/utils";
-import { calcMembershipLevel } from "@/lib/membership";
 import { OrderActions } from "./OrderActions";
 
 const STATUS_MAP: Record<string, string> = {
@@ -23,12 +21,9 @@ export default async function OrderDetailPage({ params }: Props) {
   const orderId = parseInt(id);
   if (isNaN(orderId)) notFound();
 
-  const cookieStore = await cookies();
-  const token = cookieStore.get("token")?.value;
-  if (!token) redirect("/auth/login");
-
-  const payload = await verifyJwt(token);
-  if (!payload) redirect("/auth/login");
+  const headersList = await headers();
+  const userId = headersList.get("x-user-id");
+  if (!userId) redirect("/auth/login");
 
   const order = await prisma.order.findUnique({
     where: { id: orderId },
@@ -41,7 +36,7 @@ export default async function OrderDetailPage({ params }: Props) {
     },
   });
 
-  if (!order || order.userId !== payload.userId) notFound();
+  if (!order || order.userId !== parseInt(userId)) notFound();
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">

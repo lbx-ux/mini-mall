@@ -17,18 +17,19 @@ export function AddToCartButton({ productId, stock }: AddToCartButtonProps) {
   async function handleAdd() {
     setLoading(true);
     try {
-      // 间接调用 cart Server Action — 先创建 actions/cart.ts
       const { addToCart } = await import("@/actions/cart");
       const result = await addToCart(productId);
       if (result?.error) {
         toast.error(result.error);
+        if (result.error === "请先登录") {
+          router.push("/auth/login");
+        }
       } else {
         toast.success("已加入购物车");
         router.refresh();
       }
     } catch {
-      toast.error("请先登录");
-      router.push("/auth/login");
+      toast.error("操作失败，请重试");
     } finally {
       setLoading(false);
     }

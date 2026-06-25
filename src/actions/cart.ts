@@ -17,32 +17,38 @@ export async function addToCart(productId: number) {
   const userId = await getUserId();
   if (!userId) return { error: "请先登录" };
 
-  const product = await prisma.product.findUnique({
-    where: { id: productId },
-  });
-  if (!product) return { error: "商品不存在" };
-  if (!product.isPublished) return { error: "商品已下架" };
+  const result = await prisma.$transaction(async (tx) => {
+    const product = await tx.product.findUnique({
+      where: { id: productId },
+    });
+    if (!product) return { error: "商品不存在" };
+    if (!product.isPublished) return { error: "商品已下架" };
 
-  // 确保购物车存在
-  let cart = await prisma.cart.findUnique({ where: { userId } });
-  if (!cart) {
-    cart = await prisma.cart.create({ data: { userId } });
-  }
+    // 确保购物车存在
+    let cart = await tx.cart.findUnique({ where: { userId } });
+    if (!cart) {
+      cart = await tx.cart.create({ data: { userId } });
+    }
 
-  // 检查库存
-  const existing = await prisma.cartItem.findUnique({
-    where: { cartId_productId: { cartId: cart.id, productId } },
-  });
-  const currentQty = existing ? existing.quantity : 0;
-  if (currentQty + 1 > product.stock) {
-    return { error: "库存不足" };
-  }
+    // 在事务内检查库存
+    const existing = await tx.cartItem.findUnique({
+      where: { cartId_productId: { cartId: cart.id, productId } },
+    });
+    const currentQty = existing ? existing.quantity : 0;
+    if (currentQty + 1 > product.stock) {
+      return { error: "库存不足" };
+    }
 
-  await prisma.cartItem.upsert({
-    where: { cartId_productId: { cartId: cart.id, productId } },
-    create: { cartId: cart.id, productId, quantity: 1 },
-    update: { quantity: { increment: 1 } },
+    await tx.cartItem.upsert({
+      where: { cartId_productId: { cartId: cart.id, productId } },
+      create: { cartId: cart.id, productId, quantity: 1 },
+      update: { quantity: { increment: 1 } },
+    });
+
+    return { success: true as const };
   });
+
+  if (result && "error" in result) return result;
 
   revalidatePath("/cart");
   return { success: true };

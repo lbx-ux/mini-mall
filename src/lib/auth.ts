@@ -1,9 +1,11 @@
 import { SignJWT, jwtVerify } from "jose";
 import bcrypt from "bcryptjs";
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || "mini-mall-dev-secret-change-in-production"
-);
+const secret = process.env.JWT_SECRET;
+if (!secret) {
+  throw new Error("JWT_SECRET 环境变量未设置");
+}
+const JWT_SECRET = new TextEncoder().encode(secret);
 
 export interface JwtPayload {
   userId: number;
